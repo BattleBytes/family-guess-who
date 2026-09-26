@@ -294,6 +294,49 @@
   .host-panel h3 { font-family: var(--font-display); font-size: 14px; margin: 0 0 10px; }
   .host-panel button { width: 100%; margin-top: 10px; }
 
+  .cam-box {
+    background: var(--redact);
+    border-radius: 8px;
+    overflow: hidden;
+    margin: 16px 0;
+    aspect-ratio: 4 / 3;
+  }
+  .cam-box video {
+    width: 100%; height: 100%; object-fit: cover; display: block;
+  }
+  .photo-thumb {
+    width: 96px; height: 96px; object-fit: cover;
+    border-radius: 6px; border: 3px solid #fff;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+    float: right; margin: 0 0 10px 12px;
+  }
+
+  .gallery-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    gap: 18px 14px;
+    margin-top: 14px;
+  }
+  .gallery-item {
+    background: #fff;
+    padding: 8px 8px 22px;
+    box-shadow: 0 3px 10px rgba(0,0,0,0.18);
+    transform: rotate(-2deg);
+  }
+  .gallery-item:nth-child(even) { transform: rotate(2deg); }
+  .gallery-item:nth-child(3n) { transform: rotate(-1deg); }
+  .gallery-item img {
+    width: 100%; aspect-ratio: 1; object-fit: cover; display: block;
+  }
+  .gallery-caption {
+    font-family: var(--font-display);
+    font-size: 11px;
+    color: var(--ink-soft);
+    text-align: center;
+    margin-top: 8px;
+    line-height: 1.3;
+  }
+
   .hidden { display: none !important; }
 
   @media (max-width: 480px) {
@@ -336,6 +379,12 @@
   let participants = [];      // [{id, name, answers, score}]
   let myAssignment = null;    // {profileIds, currentIndex, progress}
   let currentAttempt = 0;
+  let photos = [];            // [{id, takenByName, aboutName, correct, dataUrl}]
+
+  // ---------- camera state (not persisted) ----------
+  let cameraStream = null;
+  let capturedPhotoDataUrl = null;
+  let currentPhotoProfileId = null;
 
   // ============ helpers ============
   function esc(s) {
@@ -356,6 +405,11 @@
 
   db.collection('participants').onSnapshot(function (snap) {
     participants = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    route();
+  }, function (err) { showFatalError(err); });
+
+  db.collection('photos').onSnapshot(function (snap) {
+    photos = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     route();
   }, function (err) { showFatalError(err); });
 
@@ -556,6 +610,12 @@
       return;
     }
 
+    // reset photo state whenever we land on a new profile
+    if (currentPhotoProfileId !== profileId) {
+      capturedPhotoDataUrl = null;
+      currentPhotoProfileId = profileId;
+    }
+
     const attemptsUsed = progress.attempts || 0;
     const isDone = !!progress.done;
     const pct = Math.round((idx / ids.length) * 100);
@@ -583,7 +643,25 @@
       }
     }
 
-    let optionsHtml = participants
+    // ---- step 1: no photo yet and not done -> show camera step ----
+    if (!isDone && !capturedPhotoDataUrl) {
+      render(
+        '<p class="kicker">Round 2 — File ' + (idx + 1) + ' of ' + ids.length + '</p>' +
+        '<div class="progress-track"><div class="progress-fill" style="width:' + pct + '%"></div></div>' +
+        '<h1>Find your next mystery relative</h1>' +
+        '<p class="lede">Snap a quick photo with them, then you\'ll guess who they are.</p>' +
+        '<div class="cam-box">' +
+          '<video id="camPreview" autoplay playsinline muted></video>' +
+        '</div>' +
+        '<div id="camError"></div>' +
+        '<button class="btn-primary" id="captureBtn">Take photo</button>' +
+        '<button class="link-btn" id="skipPhotoBtn">Camera not available — skip photo</button>'
+      );
+      initCameraStep();
+      return;
+    }
+
+    let namesOptions = participants
       .slice()
       .sort(function (a, b) { return a.name.localeCompare(b.name); })
       .map(function (p) { return '<option value="' + p.id + '">' + esc(p.name) + '</option>'; })
@@ -592,12 +670,13 @@
     render(
       '<p class="kicker">Round 2 — File ' + (idx + 1) + ' of ' + ids.length + '</p>' +
       '<div class="progress-track"><div class="progress-fill" style="width:' + pct + '%"></div></div>' +
+      (capturedPhotoDataUrl ? '<img class="photo-thumb" src="' + capturedPhotoDataUrl + '" alt="your photo together">' : '') +
       '<div class="redact-wrap">' + nameLabel + '</div>' +
       '<div class="profile-box">' + qaHtml + '</div>' +
       (isDone ? '' :
-        '<label>Attempt ' + (attemptsUsed + 1) + ' of 3</label>' +
+        '<label for="guessSelect">Attempt ' + (attemptsUsed + 1) + ' of 3 — who is it?</label>' +
         '<div class="attempt-dots">' + dotsHtml + '</div>' +
-        '<select id="guessSelect"><option value="">Who wrote this?</option>' + optionsHtml + '</select>' +
+        '<select id="guessSelect"><option value="">Choose a name…</option>' + namesOptions + '</select>' +
         '<div id="guessError"></div>' +
         '<button class="btn-primary" id="guessBtn">Submit guess</button>'
       ) +
@@ -606,43 +685,101 @@
     );
 
     if (!isDone) {
-      document.getElementById('guessBtn').onclick = function () { submitGuess(profileId, progress); };
+      document.getElementById('guessBtn').onclick = function () { submitGuess(profileId, progress, profile); };
     } else {
       document.getElementById('nextBtn').onclick = function () { advanceAssignment(idx); };
     }
   }
 
-  function submitGuess(profileId, progress) {
+  // ---------- camera capture ----------
+  function initCameraStep() {
+    const video = document.getElementById('camPreview');
+    const captureBtn = document.getElementById('captureBtn');
+    const skipBtn = document.getElementById('skipPhotoBtn');
+
+    skipBtn.onclick = function () {
+      stopCamera();
+      capturedPhotoDataUrl = 'skipped';
+      route();
+    };
+
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false })
+      .then(function (stream) {
+        cameraStream = stream;
+        video.srcObject = stream;
+      })
+      .catch(function () {
+        document.getElementById('camError').innerHTML =
+          '<p class="hint">Couldn\'t open the camera — you can still play without a photo.</p>';
+        captureBtn.disabled = true;
+      });
+
+    captureBtn.onclick = function () {
+      if (!cameraStream) return;
+      const canvas = document.createElement('canvas');
+      const w = video.videoWidth || 480;
+      const h = video.videoHeight || 360;
+      const scale = Math.min(1, 480 / w);
+      canvas.width = w * scale;
+      canvas.height = h * scale;
+      canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+      capturedPhotoDataUrl = canvas.toDataURL('image/jpeg', 0.5);
+      stopCamera();
+      route();
+    };
+  }
+
+  function stopCamera() {
+    if (cameraStream) {
+      cameraStream.getTracks().forEach(function (t) { t.stop(); });
+      cameraStream = null;
+    }
+  }
+
+  function submitGuess(profileId, progress, profile) {
     const select = document.getElementById('guessSelect');
     const guessId = select.value;
     if (!guessId) {
-      document.getElementById('guessError').innerHTML = '<p class="error">Pick a name first.</p>';
+      document.getElementById('guessError').innerHTML = '<p class="error">Choose a name first.</p>';
       return;
     }
+
     const attempts = (progress.attempts || 0) + 1;
-    const correct = guessId === (myAssignment.profileIds[myAssignment.currentIndex]);
+    const correct = guessId === profileId;
     const isLastAttempt = attempts >= 3;
     const done = correct || isLastAttempt;
     const points = correct ? (POINTS_BY_ATTEMPT[attempts] || 0) : 0;
 
-    const profileKey = myAssignment.profileIds[myAssignment.currentIndex];
     const newProgress = Object.assign({}, myAssignment.progress || {});
-    newProgress[profileKey] = { attempts: attempts, correct: correct, points: points, done: done };
+    newProgress[profileId] = { attempts: attempts, correct: correct, points: points, done: done };
 
     const btn = document.getElementById('guessBtn');
     btn.disabled = true; btn.textContent = 'Checking…';
 
-    const updates = { progress: newProgress };
-    db.collection('assignments').doc(myId).update(updates).then(function () {
+    db.collection('assignments').doc(myId).update({ progress: newProgress }).then(function () {
+      const jobs = [];
       if (done && points > 0) {
-        return db.collection('participants').doc(myId).update({
+        jobs.push(db.collection('participants').doc(myId).update({
           score: firebase.firestore.FieldValue.increment(points)
-        });
+        }));
       }
+      if (done) {
+        const me = byId(myId);
+        jobs.push(db.collection('photos').add({
+          takenByName: me ? me.name : '',
+          aboutName: profile.name,
+          correct: correct,
+          dataUrl: (capturedPhotoDataUrl && capturedPhotoDataUrl !== 'skipped') ? capturedPhotoDataUrl : null,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        }));
+      }
+      return Promise.all(jobs);
     }).catch(function (err) { showFatalError(err); });
   }
 
   function advanceAssignment(currentIdx) {
+    capturedPhotoDataUrl = null;
+    currentPhotoProfileId = null;
     db.collection('assignments').doc(myId).update({
       currentIndex: currentIdx + 1
     }).catch(function (err) { showFatalError(err); });
@@ -669,10 +806,27 @@
       '</div>';
     }).join('');
 
+    const withPhotos = photos.filter(function (p) { return p.dataUrl; });
+    let galleryHtml = '';
+    if (withPhotos.length) {
+      galleryHtml =
+        '<hr class="divider">' +
+        '<p class="kicker">Photo gallery</p>' +
+        '<div class="gallery-grid">' +
+        withPhotos.map(function (p) {
+          return '<div class="gallery-item">' +
+            '<img src="' + p.dataUrl + '" alt="' + esc(p.takenByName) + ' with ' + esc(p.aboutName) + '">' +
+            '<div class="gallery-caption">' + esc(p.takenByName) + ' guessing ' + esc(p.aboutName) + (p.correct ? ' ✓' : ' ✗') + '</div>' +
+          '</div>';
+        }).join('') +
+        '</div>';
+    }
+
     render(
       '<h1>Case closed</h1>' +
       '<p class="kicker">Final leaderboard</p>' +
-      rows
+      rows +
+      galleryHtml
     );
   }
 
