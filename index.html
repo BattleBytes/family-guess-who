@@ -467,7 +467,7 @@
     render(
       '<h1>Family Files</h1>' +
       '<p class="kicker">Round 1 — Open a case on yourself</p>' +
-      '<p class="lede">Enter your name, then answer 7 questions. Later, everyone tries to guess who wrote what.</p>' +
+      '<p class="lede">Enter your name, then answer 6 questions. Later, everyone tries to guess who wrote what.</p>' +
       '<label for="nameInput">Your name</label>' +
       '<input type="text" id="nameInput" placeholder="e.g. Priya Shah" autocomplete="name">' +
       '<div id="joinError"></div>' +
@@ -548,7 +548,7 @@
 
     render(
       '<h1>Hi, ' + esc(me.name) + '</h1>' +
-      '<p class="kicker">Round 1 — 7 questions, honest answers</p>' +
+      '<p class="kicker">Round 1 — 6 questions, honest answers</p>' +
       '<p class="lede">Family will try to guess these are yours later — feel free to be specific!</p>' +
       qHtml +
       '<div id="answerError"></div>' +
@@ -565,7 +565,7 @@
       });
       if (answers.some(function (a) { return !a; })) {
         document.getElementById('answerError').innerHTML =
-          '<p class="error">Please answer all 7 questions.</p>';
+          '<p class="error">Please answer all 6 questions.</p>';
         return;
       }
       const btn = document.getElementById('submitAnswersBtn');
