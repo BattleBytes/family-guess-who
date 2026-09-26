@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Family Files: The Guessing Game</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Special+Elite&family=Lora:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+
+<!-- ============================================================
+     FAMILY FILES — a "get to know your family" guessing game
+     ============================================================
+     SETUP INSTRUCTIONS (read before publishing to GitHub Pages):
+
+     1) This game needs a small free Firebase project so everyone's
+        phones/laptops can share live data. See the FIREBASE_CONFIG
+        block below — fill it in with your own project's values.
+
+     2) Change HOST_PIN below to something only you know.
+
+     3) Edit QUESTIONS below to whatever 7 questions you want to ask.
+
+     Full setup steps were given to you in chat alongside this file.
+     ============================================================ -->
+
+<script>
+  // ---- 1. PASTE YOUR FIREBASE CONFIG HERE ----
+  const FIREBASE_CONFIG = {
+    apiKey: "AIzaSyD3hOo-Ud7JMtfxDifRBLbbjg5jrmwCtJE",
+    authDomain: "guess-who--family-edition.firebaseapp.com",
+    projectId: "guess-who--family-edition",
+    storageBucket: "guess-who--family-edition.firebasestorage.app",
+    messagingSenderId: "138581331469",
+    appId: "1:138581331469:web:ad12bb95477a67fcaf0f44"
+  };
+
+  // ---- 2. SET YOUR HOST PIN ----
+  const HOST_PIN = "1234";
+
+  // ---- 3. YOUR QUESTIONS ----
+  // type "text" -> free text answer. type "mcq" -> pick one of "options".
+  const QUESTIONS = [
+    { text: "Favourite holiday city", type: "text" },
+    { text: "Favourite food dish", type: "text" },
+    { text: "Mountain, city or beach?", type: "mcq", options: ["Mountain", "City", "Beach"] },
+    { text: "First job (where you got paid)", type: "text" },
+    { text: "Liquid of choice", type: "mcq", options: ["Water", "Chai", "Coffee", "Alcohol"] },
+    { text: "School", type: "text" }
+  ];
+
+  // How many profiles each player guesses in round 2
+  const PROFILES_PER_PLAYER = 5;
+  const POINTS_BY_ATTEMPT = { 1: 10, 2: 7, 3: 5 };
+</script>
+
+<style>
+  :root {
+    --paper: #EDE3C8;
+    --paper-dark: #E1D3AC;
+    --ink: #262220;
+    --ink-soft: #5b4f40;
+    --redact: #1a1714;
+    --stamp: #A8402C;
+    --teal: #3C6E63;
+    --gold: #B8863B;
+    --line: #c7b98f;
+    --font-display: 'Special Elite', 'Courier New', monospace;
+    --font-body: 'Lora', Georgia, serif;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--paper);
+    background-image:
+      radial-gradient(rgba(0,0,0,0.035) 1px, transparent 1px);
+    background-size: 3px 3px;
+    color: var(--ink);
+    font-family: var(--font-body);
+    display: flex;
+    justify-content: center;
+    padding: 32px 16px 64px;
+    line-height: 1.5;
+  }
+
+  .folder {
+    width: 100%;
+    max-width: 600px;
+  }
+
+  .tab {
+    display: inline-block;
+    background: var(--ink);
+    color: var(--paper);
+    font-family: var(--font-display);
+    font-size: 13px;
+    letter-spacing: 0.5px;
+    padding: 7px 18px 8px;
+    border-radius: 6px 6px 0 0;
+    margin-left: 20px;
+    margin-bottom: -1px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .card {
+    background: var(--paper-dark);
+    border: 1px solid var(--line);
+    border-radius: 4px 10px 10px 10px;
+    padding: 32px 28px;
+    position: relative;
+    box-shadow: 0 2px 0 rgba(0,0,0,0.06), 0 12px 24px rgba(38,34,32,0.08);
+  }
+
+  h1 {
+    font-family: var(--font-display);
+    font-size: 26px;
+    margin: 0 0 6px;
+    line-height: 1.3;
+  }
+
+  .kicker {
+    font-family: var(--font-display);
+    font-size: 12px;
+    color: var(--ink-soft);
+    margin: 0 0 22px;
+  }
+
+  p.lede { color: var(--ink-soft); margin-top: 0; }
+
+  label {
+    display: block;
+    font-size: 13px;
+    color: var(--ink-soft);
+    margin: 18px 0 6px;
+  }
+  label:first-of-type { margin-top: 0; }
+
+  input[type=text], input[type=password], textarea, select {
+    width: 100%;
+    font-family: var(--font-body);
+    font-size: 16px;
+    padding: 11px 13px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: #F8F2DF;
+    color: var(--ink);
+    resize: vertical;
+  }
+  textarea { min-height: 64px; }
+  input:focus, textarea:focus, select:focus {
+    outline: 2px solid var(--teal);
+    outline-offset: 1px;
+  }
+
+  button {
+    font-family: var(--font-body);
+    font-weight: 600;
+    font-size: 15px;
+    padding: 12px 22px;
+    border-radius: 7px;
+    border: none;
+    cursor: pointer;
+    margin-top: 22px;
+  }
+  .btn-primary { background: var(--ink); color: var(--paper); }
+  .btn-primary:hover { background: #3a332f; }
+  .btn-primary:disabled { background: #a89f8f; cursor: not-allowed; }
+  .btn-secondary { background: transparent; color: var(--ink-soft); border: 1px solid var(--line); }
+  .btn-danger { background: var(--stamp); color: #fdf3ea; }
+
+  .link-btn {
+    background: none; border: none; padding: 0; margin: 18px 0 0;
+    color: var(--ink-soft); text-decoration: underline; cursor: pointer;
+    font-size: 13px; font-family: var(--font-body);
+  }
+
+  .mcq-group { display: flex; flex-wrap: wrap; gap: 8px; }
+  .mcq-option {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: #F8F2DF; border: 1px solid var(--line); border-radius: 20px;
+    padding: 8px 16px; font-size: 15px; cursor: pointer; margin: 0;
+  }
+  .mcq-option:has(input:checked) {
+    background: var(--ink); color: var(--paper); border-color: var(--ink);
+  }
+  .mcq-option input { accent-color: var(--teal); }
+
+  .hint { font-size: 13px; color: var(--ink-soft); margin-top: 6px; }
+  .error { color: var(--stamp); font-size: 14px; margin-top: 10px; }
+
+  .divider {
+    border: none; border-top: 1px dashed var(--line);
+    margin: 26px 0;
+  }
+
+  .stat-row { display: flex; gap: 18px; margin: 18px 0; flex-wrap: wrap; }
+  .stat {
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 10px 16px;
+    font-size: 13px;
+    color: var(--ink-soft);
+  }
+  .stat b { display: block; font-size: 22px; color: var(--ink); font-family: var(--font-display); }
+
+  .profile-box {
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 18px 20px;
+    margin: 18px 0;
+  }
+  .qa { margin-bottom: 14px; }
+  .qa:last-child { margin-bottom: 0; }
+  .qa .q { font-size: 13px; color: var(--ink-soft); margin-bottom: 3px; }
+  .qa .a { font-size: 16px; }
+
+  .redact-wrap {
+    display: inline-flex; align-items: center; gap: 10px; margin-bottom: 6px;
+  }
+  .redact-bar {
+    display: inline-block;
+    background: var(--redact);
+    color: var(--redact);
+    padding: 3px 26px;
+    border-radius: 2px;
+    font-family: var(--font-display);
+    letter-spacing: 2px;
+    transition: all 0.5s ease;
+  }
+  .redact-bar.revealed {
+    background: transparent;
+    color: var(--teal);
+    padding: 3px 0;
+  }
+
+  .attempt-dots { display: flex; gap: 6px; margin: 4px 0 18px; }
+  .attempt-dots span {
+    width: 9px; height: 9px; border-radius: 50%;
+    background: var(--line); display: inline-block;
+  }
+  .attempt-dots span.used { background: var(--stamp); }
+
+  .stamp {
+    display: inline-block;
+    font-family: var(--font-display);
+    border: 3px solid var(--teal);
+    color: var(--teal);
+    padding: 6px 16px;
+    border-radius: 4px;
+    transform: rotate(-3deg);
+    font-size: 15px;
+    margin: 14px 0;
+  }
+  .stamp.wrong { border-color: var(--stamp); color: var(--stamp); }
+
+  .progress-track {
+    height: 6px; background: var(--paper); border-radius: 4px; overflow: hidden;
+    border: 1px solid var(--line); margin-bottom: 22px;
+  }
+  .progress-fill { height: 100%; background: var(--teal); transition: width 0.4s ease; }
+
+  .leaderboard-row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 0; border-bottom: 1px dashed var(--line);
+  }
+  .leaderboard-row:last-child { border-bottom: none; }
+  .rank {
+    font-family: var(--font-display); width: 28px; text-align: center;
+    color: var(--ink-soft); font-size: 14px;
+  }
+  .rank.top1 { color: var(--gold); font-size: 18px; }
+  .lb-name { flex: 1; font-size: 16px; }
+  .lb-score { font-family: var(--font-display); color: var(--ink); }
+
+  .host-toggle {
+    position: fixed; bottom: 20px; right: 20px;
+    background: var(--ink); color: var(--paper);
+    border-radius: 999px; padding: 12px 18px;
+    font-family: var(--font-display); font-size: 13px;
+    border: none; cursor: pointer; box-shadow: 0 6px 18px rgba(0,0,0,0.25);
+    z-index: 50;
+  }
+  .host-panel {
+    position: fixed; bottom: 78px; right: 20px; width: 300px; max-width: calc(100vw - 32px);
+    background: var(--paper-dark); border: 1px solid var(--line); border-radius: 10px;
+    padding: 18px; z-index: 50; box-shadow: 0 12px 30px rgba(0,0,0,0.25);
+  }
+  .host-panel h3 { font-family: var(--font-display); font-size: 14px; margin: 0 0 10px; }
+  .host-panel button { width: 100%; margin-top: 10px; }
+
+  .hidden { display: none !important; }
+
+  @media (max-width: 480px) {
+    .card { padding: 24px 18px; }
+    h1 { font-size: 22px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="folder">
+  <div class="tab">FAMILY FILES — CONFIDENTIAL</div>
+  <div class="card" id="app">
+    <p>Loading…</p>
+  </div>
+</div>
+
+<button id="hostToggleBtn" class="host-toggle hidden">⚙ Host</button>
+<div id="hostPanel" class="host-panel hidden"></div>
+
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+<script>
+(function () {
+  "use strict";
+
+  firebase.initializeApp(FIREBASE_CONFIG);
+  const db = firebase.firestore();
+  const app = document.getElementById('app');
+  const hostToggleBtn = document.getElementById('hostToggleBtn');
+  const hostPanel = document.getElementById('hostPanel');
+
+  // ---------- local session ----------
+  let myId = localStorage.getItem('ff_participantId') || null;
+  let myName = localStorage.getItem('ff_name') || null;
+  let isHost = localStorage.getItem('ff_isHost') === '1';
+
+  // ---------- live state ----------
+  let gamePhase = 'collecting';
+  let participants = [];      // [{id, name, answers, score}]
+  let myAssignment = null;    // {profileIds, currentIndex, progress}
+  let currentAttempt = 0;
+
+  // ============ helpers ============
+  function esc(s) {
+    const d = document.createElement('div');
+    d.textContent = s == null ? '' : s;
+    return d.innerHTML;
+  }
+
+  function render(html) { app.innerHTML = html; }
+
+  function byId(id) { return participants.find(p => p.id === id); }
+
+  // ============ Firestore listeners ============
+  db.collection('game').doc('state').onSnapshot(function (doc) {
+    gamePhase = doc.exists ? (doc.data().phase || 'collecting') : 'collecting';
+    route();
+  }, function (err) { showFatalError(err); });
+
+  db.collection('participants').onSnapshot(function (snap) {
+    participants = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    route();
+  }, function (err) { showFatalError(err); });
+
+  let unsubAssignment = null;
+  function watchMyAssignment() {
+    if (unsubAssignment) unsubAssignment();
+    if (!myId) return;
+    unsubAssignment = db.collection('assignments').doc(myId).onSnapshot(function (doc) {
+      myAssignment = doc.exists ? doc.data() : null;
+      currentAttempt = 0;
+      route();
+    });
+  }
+  watchMyAssignment();
+
+  function showFatalError(err) {
+    console.error(err);
+    render(
+      '<h1>Connection trouble</h1>' +
+      '<p class="lede">The game could not reach its database. If you are the host, double-check the FIREBASE_CONFIG values and Firestore rules in the HTML file.</p>' +
+      '<p class="error">' + esc(err.message || String(err)) + '</p>'
+    );
+  }
+
+  // ============ routing ============
+  function route() {
+    if (isHost) {
+      hostToggleBtn.classList.remove('hidden');
+      renderHostPanel();
+    }
+
+    if (!myId) { renderJoin(); return; }
+
+    const me = byId(myId);
+    if (!me) { // our doc vanished (e.g. game was reset)
+      localStorage.removeItem('ff_participantId');
+      myId = null; myName = null;
+      renderJoin();
+      return;
+    }
+
+    if (!me.answers || me.answers.length < QUESTIONS.length) {
+      renderAnswerForm(me);
+      return;
+    }
+
+    if (gamePhase === 'collecting') { renderWaitingCollect(me); return; }
+    if (gamePhase === 'guessing') { renderGuessing(me); return; }
+    if (gamePhase === 'results') { renderLeaderboard(me); return; }
+    renderWaitingCollect(me);
+  }
+
+  // ============ SCREEN: join ============
+  function renderJoin() {
+    render(
+      '<h1>Family Files</h1>' +
+      '<p class="kicker">Round 1 — Open a case on yourself</p>' +
+      '<p class="lede">Enter your name, then answer 7 questions. Later, everyone tries to guess who wrote what.</p>' +
+      '<label for="nameInput">Your name</label>' +
+      '<input type="text" id="nameInput" placeholder="e.g. Priya Shah" autocomplete="name">' +
+      '<div id="joinError"></div>' +
+      '<button class="btn-primary" id="joinBtn">Start my file</button>' +
+      '<hr class="divider">' +
+      '<button class="link-btn" id="hostLinkBtn">Hosting this game? Unlock host controls</button>' +
+      '<div id="hostPinArea" class="hidden">' +
+        '<label for="pinInput">Host PIN</label>' +
+        '<input type="password" id="pinInput" inputmode="numeric">' +
+        '<button class="btn-secondary" id="pinSubmitBtn">Unlock</button>' +
+        '<div id="pinError"></div>' +
+      '</div>'
+    );
+
+    document.getElementById('joinBtn').onclick = handleJoin;
+    document.getElementById('nameInput').addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') handleJoin();
+    });
+    document.getElementById('hostLinkBtn').onclick = function () {
+      document.getElementById('hostPinArea').classList.remove('hidden');
+    };
+    document.getElementById('pinSubmitBtn').onclick = function () {
+      const val = document.getElementById('pinInput').value;
+      if (val === HOST_PIN) {
+        isHost = true;
+        localStorage.setItem('ff_isHost', '1');
+        route();
+      } else {
+        document.getElementById('pinError').innerHTML = '<p class="error">Incorrect PIN.</p>';
+      }
+    };
+  }
+
+  function handleJoin() {
+    const nameInput = document.getElementById('nameInput');
+    const name = nameInput.value.trim();
+    if (!name) {
+      document.getElementById('joinError').innerHTML = '<p class="error">Please enter your name.</p>';
+      return;
+    }
+    const btn = document.getElementById('joinBtn');
+    btn.disabled = true; btn.textContent = 'Opening file…';
+
+    db.collection('participants').add({
+      name: name,
+      answers: [],
+      score: 0,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    }).then(function (ref) {
+      myId = ref.id;
+      myName = name;
+      localStorage.setItem('ff_participantId', myId);
+      localStorage.setItem('ff_name', myName);
+      watchMyAssignment();
+      route();
+    }).catch(function (err) { showFatalError(err); });
+  }
+
+  // ============ SCREEN: answer 7 questions ============
+  function renderAnswerForm(me) {
+    let qHtml = '';
+    QUESTIONS.forEach(function (q, i) {
+      if (q.type === 'mcq') {
+        let optsHtml = q.options.map(function (opt) {
+          return '<label class="mcq-option">' +
+            '<input type="radio" name="q' + i + '" value="' + esc(opt) + '"> ' + esc(opt) +
+          '</label>';
+        }).join('');
+        qHtml +=
+          '<label>' + (i + 1) + '. ' + esc(q.text) + '</label>' +
+          '<div class="mcq-group">' + optsHtml + '</div>';
+      } else {
+        qHtml +=
+          '<label for="q' + i + '">' + (i + 1) + '. ' + esc(q.text) + '</label>' +
+          '<textarea id="q' + i + '" maxlength="300"></textarea>';
+      }
+    });
+
+    render(
+      '<h1>Hi, ' + esc(me.name) + '</h1>' +
+      '<p class="kicker">Round 1 — 7 questions, honest answers</p>' +
+      '<p class="lede">Family will try to guess these are yours later — feel free to be specific!</p>' +
+      qHtml +
+      '<div id="answerError"></div>' +
+      '<button class="btn-primary" id="submitAnswersBtn">Submit my file</button>'
+    );
+
+    document.getElementById('submitAnswersBtn').onclick = function () {
+      const answers = QUESTIONS.map(function (q, i) {
+        if (q.type === 'mcq') {
+          const checked = document.querySelector('input[name="q' + i + '"]:checked');
+          return checked ? checked.value : '';
+        }
+        return document.getElementById('q' + i).value.trim();
+      });
+      if (answers.some(function (a) { return !a; })) {
+        document.getElementById('answerError').innerHTML =
+          '<p class="error">Please answer all 7 questions.</p>';
+        return;
+      }
+      const btn = document.getElementById('submitAnswersBtn');
+      btn.disabled = true; btn.textContent = 'Saving…';
+      db.collection('participants').doc(myId).update({ answers: answers })
+        .then(route)
+        .catch(function (err) { showFatalError(err); });
+    };
+  }
+
+  // ============ SCREEN: waiting during collection ============
+  function renderWaitingCollect(me) {
+    const total = participants.length;
+    const done = participants.filter(function (p) { return p.answers && p.answers.length >= QUESTIONS.length; }).length;
+    render(
+      '<h1>File received, ' + esc(me.name) + '</h1>' +
+      '<p class="lede">Sit tight — waiting for everyone else to finish their files.</p>' +
+      '<div class="stat-row">' +
+        '<div class="stat"><b>' + done + '</b>of ' + total + ' files complete</div>' +
+      '</div>' +
+      '<p class="hint">The host will start the guessing round once everyone is ready.</p>'
+    );
+  }
+
+  // ============ SCREEN: guessing ============
+  function renderGuessing(me) {
+    if (!myAssignment) {
+      render('<h1>One moment…</h1><p class="lede">Getting your case files ready.</p>');
+      return;
+    }
+    const idx = myAssignment.currentIndex || 0;
+    const ids = myAssignment.profileIds || [];
+
+    if (idx >= ids.length) { renderGuessDone(me); return; }
+
+    const profileId = ids[idx];
+    const progress = (myAssignment.progress || {})[profileId] || {};
+    const profile = byId(profileId);
+
+    if (!profile) {
+      render('<h1>One moment…</h1><p class="lede">Loading the next file.</p>');
+      return;
+    }
+
+    const attemptsUsed = progress.attempts || 0;
+    const isDone = !!progress.done;
+    const pct = Math.round((idx / ids.length) * 100);
+
+    let qaHtml = '';
+    profile.answers.forEach(function (a, i) {
+      qaHtml += '<div class="qa"><div class="q">' + esc(QUESTIONS[i].text) + '</div><div class="a">' + esc(a) + '</div></div>';
+    });
+
+    let dotsHtml = '';
+    for (let i = 0; i < 3; i++) {
+      dotsHtml += '<span class="' + (i < attemptsUsed ? 'used' : '') + '"></span>';
+    }
+
+    let revealHtml = '';
+    let nameLabel = isDone
+      ? '<span class="redact-bar revealed">' + esc(profile.name) + '</span>'
+      : '<span class="redact-bar">REDACTED</span>';
+
+    if (isDone) {
+      if (progress.correct) {
+        revealHtml = '<div class="stamp">CASE CLOSED · +' + progress.points + ' pts</div>';
+      } else {
+        revealHtml = '<div class="stamp wrong">NOT SOLVED · +0 pts</div>';
+      }
+    }
+
+    let optionsHtml = participants
+      .slice()
+      .sort(function (a, b) { return a.name.localeCompare(b.name); })
+      .map(function (p) { return '<option value="' + p.id + '">' + esc(p.name) + '</option>'; })
+      .join('');
+
+    render(
+      '<p class="kicker">Round 2 — File ' + (idx + 1) + ' of ' + ids.length + '</p>' +
+      '<div class="progress-track"><div class="progress-fill" style="width:' + pct + '%"></div></div>' +
+      '<div class="redact-wrap">' + nameLabel + '</div>' +
+      '<div class="profile-box">' + qaHtml + '</div>' +
+      (isDone ? '' :
+        '<label>Attempt ' + (attemptsUsed + 1) + ' of 3</label>' +
+        '<div class="attempt-dots">' + dotsHtml + '</div>' +
+        '<select id="guessSelect"><option value="">Who wrote this?</option>' + optionsHtml + '</select>' +
+        '<div id="guessError"></div>' +
+        '<button class="btn-primary" id="guessBtn">Submit guess</button>'
+      ) +
+      revealHtml +
+      (isDone ? '<button class="btn-primary" id="nextBtn">Next file →</button>' : '')
+    );
+
+    if (!isDone) {
+      document.getElementById('guessBtn').onclick = function () { submitGuess(profileId, progress); };
+    } else {
+      document.getElementById('nextBtn').onclick = function () { advanceAssignment(idx); };
+    }
+  }
+
+  function submitGuess(profileId, progress) {
+    const select = document.getElementById('guessSelect');
+    const guessId = select.value;
+    if (!guessId) {
+      document.getElementById('guessError').innerHTML = '<p class="error">Pick a name first.</p>';
+      return;
+    }
+    const attempts = (progress.attempts || 0) + 1;
+    const correct = guessId === (myAssignment.profileIds[myAssignment.currentIndex]);
+    const isLastAttempt = attempts >= 3;
+    const done = correct || isLastAttempt;
+    const points = correct ? (POINTS_BY_ATTEMPT[attempts] || 0) : 0;
+
+    const profileKey = myAssignment.profileIds[myAssignment.currentIndex];
+    const newProgress = Object.assign({}, myAssignment.progress || {});
+    newProgress[profileKey] = { attempts: attempts, correct: correct, points: points, done: done };
+
+    const btn = document.getElementById('guessBtn');
+    btn.disabled = true; btn.textContent = 'Checking…';
+
+    const updates = { progress: newProgress };
+    db.collection('assignments').doc(myId).update(updates).then(function () {
+      if (done && points > 0) {
+        return db.collection('participants').doc(myId).update({
+          score: firebase.firestore.FieldValue.increment(points)
+        });
+      }
+    }).catch(function (err) { showFatalError(err); });
+  }
+
+  function advanceAssignment(currentIdx) {
+    db.collection('assignments').doc(myId).update({
+      currentIndex: currentIdx + 1
+    }).catch(function (err) { showFatalError(err); });
+  }
+
+  function renderGuessDone(me) {
+    render(
+      '<h1>Nice work, ' + esc(me.name) + '</h1>' +
+      '<p class="lede">You solved all your files. Waiting for the host to reveal the leaderboard.</p>' +
+      '<div class="stat-row"><div class="stat"><b>' + (me.score || 0) + '</b>your points so far</div></div>'
+    );
+  }
+
+  // ============ SCREEN: leaderboard ============
+  function renderLeaderboard(me) {
+    const ranked = participants.slice().sort(function (a, b) { return (b.score || 0) - (a.score || 0); });
+    let rows = ranked.map(function (p, i) {
+      const rankClass = i === 0 ? 'rank top1' : 'rank';
+      const medal = i === 0 ? '🏆 ' : (i + 1) + '.';
+      return '<div class="leaderboard-row">' +
+        '<div class="' + rankClass + '">' + medal + '</div>' +
+        '<div class="lb-name">' + esc(p.name) + (p.id === myId ? ' (you)' : '') + '</div>' +
+        '<div class="lb-score">' + (p.score || 0) + '</div>' +
+      '</div>';
+    }).join('');
+
+    render(
+      '<h1>Case closed</h1>' +
+      '<p class="kicker">Final leaderboard</p>' +
+      rows
+    );
+  }
+
+  // ============ HOST PANEL ============
+  function renderHostPanel() {
+    const total = participants.length;
+    const filesDone = participants.filter(function (p) { return p.answers && p.answers.length >= QUESTIONS.length; }).length;
+    const guessingDone = participants.filter(function (p) {
+      // heuristic: no direct field, so just show phase-appropriate stat
+      return false;
+    });
+
+    hostPanel.innerHTML =
+      '<h3>Host controls</h3>' +
+      '<div class="stat-row" style="margin:0 0 6px;">' +
+        '<div class="stat"><b>' + total + '</b>joined</div>' +
+        '<div class="stat"><b>' + filesDone + '</b>files complete</div>' +
+      '</div>' +
+      '<div class="hint">Phase: ' + gamePhase + '</div>' +
+      '<button class="btn-primary" id="startGuessingBtn" ' + (gamePhase !== 'collecting' || total < 2 ? 'disabled' : '') + '>Start guessing round</button>' +
+      '<button class="btn-primary" id="revealBtn" ' + (gamePhase !== 'guessing' ? 'disabled' : '') + '>Reveal leaderboard</button>' +
+      '<button class="btn-danger" id="resetBtn">Reset entire game</button>';
+
+    document.getElementById('startGuessingBtn').onclick = startGuessingRound;
+    document.getElementById('revealBtn').onclick = function () {
+      db.collection('game').doc('state').set({ phase: 'results' }, { merge: true });
+    };
+    document.getElementById('resetBtn').onclick = resetGame;
+  }
+
+  hostToggleBtn.onclick = function () {
+    hostPanel.classList.toggle('hidden');
+  };
+
+  function shuffle(arr) {
+    const a = arr.slice();
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+
+  function startGuessingRound() {
+    const eligible = participants.filter(function (p) { return p.answers && p.answers.length >= QUESTIONS.length; });
+    if (eligible.length < 2) return;
+
+    const batch = db.batch();
+    eligible.forEach(function (p) {
+      const others = eligible.filter(function (o) { return o.id !== p.id; });
+      const picks = shuffle(others).slice(0, Math.min(PROFILES_PER_PLAYER, others.length)).map(function (o) { return o.id; });
+      const ref = db.collection('assignments').doc(p.id);
+      batch.set(ref, { profileIds: picks, currentIndex: 0, progress: {} });
+    });
+    batch.set(db.collection('game').doc('state'), { phase: 'guessing' }, { merge: true });
+    batch.commit().catch(function (err) { showFatalError(err); });
+  }
+
+  function resetGame() {
+    if (!confirm('This deletes every answer, assignment, and score. Continue?')) return;
+    Promise.all([
+      db.collection('participants').get(),
+      db.collection('assignments').get()
+    ]).then(function (results) {
+      const batch = db.batch();
+      results[0].docs.forEach(function (d) { batch.delete(d.ref); });
+      results[1].docs.forEach(function (d) { batch.delete(d.ref); });
+      batch.set(db.collection('game').doc('state'), { phase: 'collecting' }, { merge: true });
+      return batch.commit();
+    }).then(function () {
+      localStorage.removeItem('ff_participantId');
+      localStorage.removeItem('ff_name');
+      myId = null; myName = null;
+      route();
+    }).catch(function (err) { showFatalError(err); });
+  }
+
+  // ============ init ============
+  route();
+})();
+</script>
+</body>
+</html>
