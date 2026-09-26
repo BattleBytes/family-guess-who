@@ -643,12 +643,14 @@
       }
     }
 
-    // ---- step 1: no photo yet and not done -> show camera step ----
+    // ---- no photo yet and not done -> show the profile first, then the camera step below it ----
     if (!isDone && !capturedPhotoDataUrl) {
       render(
         '<p class="kicker">Round 2 — File ' + (idx + 1) + ' of ' + ids.length + '</p>' +
         '<div class="progress-track"><div class="progress-fill" style="width:' + pct + '%"></div></div>' +
-        '<h1>Find your next mystery relative</h1>' +
+        '<div class="redact-wrap">' + nameLabel + '</div>' +
+        '<div class="profile-box">' + qaHtml + '</div>' +
+        '<h1>Find this mystery relative</h1>' +
         '<p class="lede">Snap a quick photo with them, then you\'ll guess who they are.</p>' +
         '<div class="cam-box">' +
           '<video id="camPreview" autoplay playsinline muted></video>' +
@@ -703,7 +705,7 @@
       route();
     };
 
-    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false })
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false })
       .then(function (stream) {
         cameraStream = stream;
         video.srcObject = stream;
@@ -886,14 +888,16 @@
   }
 
   function resetGame() {
-    if (!confirm('This deletes every answer, assignment, and score. Continue?')) return;
+    if (!confirm('This deletes every answer, assignment, score, and photo. Continue?')) return;
     Promise.all([
       db.collection('participants').get(),
-      db.collection('assignments').get()
+      db.collection('assignments').get(),
+      db.collection('photos').get()
     ]).then(function (results) {
       const batch = db.batch();
       results[0].docs.forEach(function (d) { batch.delete(d.ref); });
       results[1].docs.forEach(function (d) { batch.delete(d.ref); });
+      results[2].docs.forEach(function (d) { batch.delete(d.ref); });
       batch.set(db.collection('game').doc('state'), { phase: 'collecting' }, { merge: true });
       return batch.commit();
     }).then(function () {
